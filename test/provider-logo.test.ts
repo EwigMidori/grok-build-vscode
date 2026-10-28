@@ -55,7 +55,7 @@ describe("provider logo assets", () => {
   // is a logo path is not a typo you see, it is what the composer asks you.
   it("gives every provider a composer prompt, never a logo path", () => {
     const body = objectBody(read("media/chat.js"), "COMPOSER_PLACEHOLDER");
-    for (const id of ["grok", "codex", "claude", "muse", "agy"]) {
+    for (const id of ["grok", "codex", "claude", "muse", "agy", "deepseek"]) {
       const found = body.match(new RegExp(`${id}: "([^"]*)"`));
       expect(found, `${id} needs a composer placeholder`).toBeTruthy();
       expect(found![1].length, `${id}'s placeholder is too long to be a prompt`).toBeLessThan(40);

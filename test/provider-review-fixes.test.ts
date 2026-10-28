@@ -161,7 +161,7 @@ describe("multi-provider review regressions", () => {
     // the full literal broke when a `report` callback was threaded through so a
     // cloud environment's failures reach the person who asked, which changed
     // nothing about the ordering this guards.
-    const disconnect = body.indexOf("await this.finishProviderLogout(provider");
+    const disconnect = body.indexOf("await this.finishProviderLogout(provider", exec);
     expect(exec).toBeGreaterThan(-1);
     expect(disconnect).toBeGreaterThan(exec);
     expect(body.slice(exec, disconnect)).toContain("catch (error)");
@@ -287,6 +287,7 @@ describe("multi-provider review regressions", () => {
       type: "providerState",
       // keepsCliSignIn: a desk host's account button disconnects (#203).
       providers: [
+        { id: "deepseek", connected: false, keepsCliSignIn: true, hasApiKey: false },
         { id: "muse", connected: false, keepsCliSignIn: true },
         { id: "grok", connected: true, keepsCliSignIn: true },
         { id: "codex", connected: false, keepsCliSignIn: true },

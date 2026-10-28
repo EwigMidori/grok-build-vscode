@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "rootDir": "adapters/deepseek",
+    "outDir": "out/deepseek-adapter",
+    "strict": true,
+    "noEmitOnError": true,
+    "skipLibCheck": false,
+    "types": ["node"]
+  },
+  "include": ["adapters/deepseek/**/*.mts"]
+}

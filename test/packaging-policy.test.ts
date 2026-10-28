@@ -127,7 +127,18 @@ describe("VSIX excludes desktop app", () => {
       expect(vscodeignore).toContain(`!node_modules/${runtime}`);
       expect(builder).toContain(`node_modules/${runtime}`);
     }
-    expect(read("scripts/check-vsix-requires.mjs")).toContain('checkEsmPackageGraph(root, packed, ["out/muse-adapter/main.mjs"])');
+    expect(read("scripts/check-vsix-requires.mjs")).toContain('checkEsmPackageGraph(root, packed, ["out/muse-adapter/main.mjs", "out/deepseek-adapter/main.mjs"])');
+  });
+
+  it("builds and ships the standalone DeepSeek entry without another runtime dependency", () => {
+    const builder = read("electron-builder.yml");
+    expect(pkg.scripts.compile).toContain("compile:deepseek-adapter");
+    expect(pkg.scripts["compile:deepseek-adapter"]).toContain("tsconfig.deepseek-adapter.json");
+    const config = JSON.parse(read("tsconfig.deepseek-adapter.json"));
+    expect(config.compilerOptions.module).toBe("NodeNext");
+    expect(config.compilerOptions.outDir).toBe("out/deepseek-adapter");
+    expect(vscodeignore).toContain("!out/deepseek-adapter/*.mjs");
+    expect(builder).toContain("- out/deepseek-adapter/*.mjs");
   });
 
   it(".vscodeignore excludes desktop sources, launcher, and dist output", () => {

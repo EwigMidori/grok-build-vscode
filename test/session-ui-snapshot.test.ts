@@ -8,6 +8,7 @@ const OFFERED_MODES = {
   codex: ["agent", "yolo"],
   muse: ["yolo", "agent", "onRequest"],
   agy: ["agent", "yolo"],
+  deepseek: ["agent"],
 };
 
 describe("sessionUiSnapshot", () => {

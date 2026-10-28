@@ -4,7 +4,10 @@ import { StringDecoder } from "node:string_decoder";
 import * as os from "node:os";
 
 export interface TerminalCreateParams {
-  command: string; // single shell-quoted string per ACP
+  command: string; // shell command by default; executable when directArgv is set
+  args?: string[];
+  /** Host-selected execution policy, never trusted from an ACP request. */
+  directArgv?: boolean;
   env?: Array<{ name: string; value: string }>;
   cwd?: string;
   outputByteLimit?: number;
@@ -548,6 +551,13 @@ export class TerminalManager {
   create(params: TerminalCreateParams, owner?: object): { terminalId: string } {
     this.deps.beforeCreate?.();
     const env = this.envFromParams(params.env);
+    if (params.directArgv) {
+      if (params.args !== undefined && (!Array.isArray(params.args) || params.args.some(arg => typeof arg !== "string"))) {
+        throw new Error("Terminal args must be an array of strings");
+      }
+      // DeepSeek tools run here, not in the adapter's sanitized environment.
+      for (const name of Object.keys(env)) if (/^DEEPSEEK_/i.test(name)) delete env[name];
+    }
     const cwd = params.cwd || process.cwd();
     const byteLimit = params.outputByteLimit ?? DEFAULT_BYTE_LIMIT;
     // `detached` on POSIX so the shell leads its own PROCESS GROUP, which is
@@ -563,7 +573,9 @@ export class TerminalManager {
     // `process.platform` (not `deps.platform`): kill-plan tests inject win32
     // on a POSIX box and still have to spawn a real local command.
     let proc: ChildProcess;
-    if (process.platform === "win32") {
+    if (params.directArgv) {
+      proc = spawn(params.command, params.args ?? [], { cwd, env, shell: false, detached, windowsHide: true });
+    } else if (process.platform === "win32") {
       proc = spawn(params.command, { cwd, env, shell: terminalShell(), detached });
     } else {
       const { file, args } = posixSpawnArgv(params.command, terminalShell());

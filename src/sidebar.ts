@@ -3,6 +3,8 @@ import { remoteHandoffUrl, remoteHandoffQr, type HandoffSession } from "./remote
 import type { RemoteHandoffSource } from "./protocol";
 import { CloudHostUpdate, cloudHostIsIdle, cloudHostBootSupportsUpdate, cloudLiveWorkflowRuns, installedCloudHostVersion, parseCloudHostUpdateAttempt, removeCloudHostUpdateStamps, CLOUD_UPDATE_REFUSAL } from "./cloud-host-update";
 import { MuseBackend, withMuseCredentialBackend } from "./muse-backend";
+import { DeepSeekBackend, DEEPSEEK_API_KEY_SECRET, normalizeDeepSeekApiKey } from "./deepseek-backend";
+import { createDeepSeekRelay, type DeepSeekRelayLease } from "./deepseek-key-relay";
 import { locateMuseCli, parseMuseVersionOutput } from "./muse-cli-locator";
 import { museInstallCommand } from "./muse-install";
 import { AgyBackend, agyAcpDir, agySessionsFor, listAgyCatalog } from "./agy-backend";
@@ -1041,6 +1043,9 @@ export class GrokSidebar {
   private agyServerPath?: string;
   /** The one place a Gemini API key goes; see agy-key-relay.ts. */
   private agyRelay?: AgyKeyRelay;
+  private deepseekRelays = new Set<DeepSeekRelayLease>();
+  private deepseekKeySaved = false;
+  private deepseekSessionCache = new Map<string, SessionListEntry[]>();
   /** Models whose agent answered an Auto request with its fallback, this run:
    *  new conversations on them start in Agent mode without asking again. */
   private nativeAutoUnavailable?: Set<string>;
@@ -1799,6 +1804,7 @@ export class GrokSidebar {
   }
 
   private locateProvider(provider: AcpProvider): string | undefined {
+    if (provider === "deepseek") return process.execPath;
     if (provider === "grok") {
       if (this.cliPath && fs.existsSync(this.cliPath)) return this.cliPath;
       if (this.testForceMissingGrokCli) {
@@ -1866,6 +1872,7 @@ export class GrokSidebar {
       muse: !!this.locateProvider("muse"),
       // Not offered reads as not installed, so nothing can run it.
       agy: this.agyOffered() && !!this.locateProvider("agy"),
+      deepseek: true,
     };
   }
 
@@ -1904,6 +1911,7 @@ export class GrokSidebar {
     if (provider === "codex") return { cache: this.codexSessionCache };
     if (provider === "muse") return { cache: this.museSessionCache ??= new Map() };
     if (provider === "agy") return { cache: this.agySessionCache ??= new Map() };
+    if (provider === "deepseek") return { cache: this.deepseekSessionCache ??= new Map() };
     if (provider === "claude") return { cache: this.claudeSessionCache };
     return undefined;
   }
@@ -1932,7 +1940,8 @@ export class GrokSidebar {
     }));
   }
 
-  private createProviderBackend(provider: AcpProvider): CodexBackend | ClaudeBackend | MuseBackend | AgyBackend | undefined {
+  private createProviderBackend(provider: AcpProvider): CodexBackend | ClaudeBackend | MuseBackend | AgyBackend | DeepSeekBackend | undefined {
+    if (provider === "deepseek") return new DeepSeekBackend(undefined, this.deepseekSessionDir());
     if (provider === "codex") return new CodexBackend();
     if (provider === "claude") return new ClaudeBackend();
     if (provider === "muse") return new MuseBackend(undefined, isCloudEnvironment());
@@ -1972,7 +1981,7 @@ export class GrokSidebar {
    * something available the session's own provider is the specific gap to
    * close, so show that.
    */
-  private onboardingForSession(session: Session): "connect-agent" | "auth-required" | "codex-login" | "claude-login" | "muse-login" | "agy-login" {
+  private onboardingForSession(session: Session): "connect-agent" | "auth-required" | "codex-login" | "claude-login" | "muse-login" | "agy-login" | "deepseek-login" {
     if (session.hasHistory) return providerLoginState(session.provider);
     return this.usableProviders().length ? providerLoginState(session.provider) : "connect-agent";
   }
@@ -2165,6 +2174,11 @@ export class GrokSidebar {
     const signal = this.providerRunSignal(provider);
     // MSP exposes no credential-status operation. A catalog read cannot prove sign-in.
     if (provider === "muse") return false;
+    if (provider === "deepseek") {
+      const present = !!(await this.deepseekSavedKey());
+      this.setProviderNeedsLogin(provider, !present);
+      return present;
+    }
     // Antigravity's honest cheap answer is its stored sign-in. A probe process
     // costs a 15-25 s start on Windows, and with a saved method but no token
     // its session/new opens the browser.
@@ -2712,6 +2726,35 @@ export class GrokSidebar {
     catch { return undefined; }
   }
 
+  private deepseekSessionDir(): string | undefined {
+    const root = this.context?.globalStorageUri?.fsPath;
+    return root ? path.join(root, "deepseek", "sessions") : undefined;
+  }
+
+  private async deepseekSavedKey(): Promise<string | undefined> {
+    try {
+      const key = normalizeDeepSeekApiKey(await this.context.secrets.get(DEEPSEEK_API_KEY_SECRET));
+      this.deepseekKeySaved = !!key;
+      return key;
+    }
+    catch { return undefined; }
+  }
+
+  private async deepseekRelay(key: string): Promise<DeepSeekRelayLease> {
+    const lease = await createDeepSeekRelay(key);
+    this.deepseekRelays ??= new Set();
+    this.deepseekRelays.add(lease);
+    const release = lease.release;
+    lease.release = () => { this.deepseekRelays.delete(lease); release(); };
+    return lease;
+  }
+
+  private bindDeepseekRelay(client: AcpClient, relay: DeepSeekRelayLease): void {
+    client.once("exit", () => relay.release());
+    const dispose = client.dispose.bind(client);
+    client.dispose = (timeoutMs) => { relay.release(); return dispose(timeoutMs); };
+  }
+
   /** Re-read what is stored for each way of signing in, for the choice card
    *  and Settings. Booleans only; the key itself never leaves secrets. */
   private async refreshAgySaved(): Promise<void> {
@@ -2917,6 +2960,8 @@ export class GrokSidebar {
     return {
       type: "providerState",
       providers: [
+        { id: "deepseek", connected: connected.deepseek === true, keepsCliSignIn: true, hasApiKey: this.deepseekKeySaved === true,
+          ...(needsLogin.deepseek ? { needsLogin: true } : {}) },
         { id: "muse", connected: museConnected, ...button,
           ...(museConnected && versions.muse ? { cliVersion: versions.muse } : {}),
           ...(needsLogin.muse ? { needsLogin: true } : {}) },
@@ -3039,8 +3084,9 @@ export class GrokSidebar {
         if (opts.credentials === true) await this.reprobeProviderCredentials(provider).catch(() => false);
         // Antigravity's version arrives with its handshake: there is no cheap
         // `--version` for a server that takes 15-25 s to start on Windows.
-        if (provider !== "grok" && provider !== "agy") await this.reprobeProviderVersion(provider);
+        if (provider !== "grok" && provider !== "agy" && provider !== "deepseek") await this.reprobeProviderVersion(provider);
       }));
+      await this.deepseekSavedKey();
     } finally {
       this.providerRefreshInFlight = false;
       this.postProviderState();
@@ -9392,7 +9438,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
     provider: AcpProvider = "grok",
     opts: { fromRemote?: boolean; report?: (text: string) => void; signOutCli?: boolean } = {},
   ): Promise<void> {
-    if (!opts.signOutCli && !isCloudEnvironment()) {
+    if (!opts.signOutCli && (!isCloudEnvironment() || provider === "deepseek")) {
       await this.disconnectProvider(provider, opts.report);
       return;
     }
@@ -9406,6 +9452,14 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
       if (opts.report) opts.report(text);
       else void this.host.showErrorMessage(text);
     };
+    if (provider === "deepseek") {
+      try { await this.context.secrets.delete(DEEPSEEK_API_KEY_SECRET); }
+      catch { fail("The DeepSeek API key could not be deleted. The account remains connected."); return; }
+      this.deepseekKeySaved = false;
+      for (const relay of this.deepseekRelays ?? []) relay.release();
+      await this.finishProviderLogout(provider, opts.report);
+      return;
+    }
     if (provider === "agy") {
       await this.signOutAgy(opts, fail);
       return;
@@ -9562,7 +9616,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
     if (working) {
       const name = providerDisplayName(provider);
       const choice = await this.host.showWarningMessage(
-        `Disconnect ${name}? ${working > 1 ? `${working} replies` : "A reply"} in progress will stop. The ${name} CLI stays signed in.`,
+        `Disconnect ${name}? ${working > 1 ? `${working} replies` : "A reply"} in progress will stop. ${provider === "deepseek" ? "The saved API key is kept." : `The ${name} CLI stays signed in.`}`,
         { modal: true },
         "Disconnect",
       );
@@ -9974,6 +10028,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
     this.agyInstallAbort?.abort(new Error("Installation cancelled."));
     this.agyInstallAbort = undefined;
     void this.agyRelay?.close();
+    for (const relay of this.deepseekRelays ?? []) relay.release();
     try { this.keepAwake.stop(); } catch { /* the pid watcher reaps it anyway */ }
     try { this.settingsEditor?.dispose(); } catch { /* tab already gone */ }
     this.settingsEditor = undefined;
@@ -10055,6 +10110,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
   private probeProviderVersion(provider: AcpProvider): Promise<string> {
     if (!this.hasProviderConsent(provider)) return Promise.resolve("");
     if (provider === "agy") return Promise.resolve(this.providerCliVersions.agy ?? "");
+    if (provider === "deepseek") return Promise.resolve("");
     if (provider === "codex") return this.probeCodexVersion();
     if (provider === "claude") return this.probeClaudeVersion();
     if (provider === "muse") return this.probeMuseVersion();
@@ -11236,6 +11292,16 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
     // phone-driven start opens at an empty desk. Signing in stays a press at
     // the computer.
     const agyCredential = session.provider === "agy" ? await this.agyCredentialFor() : undefined;
+    const deepseekKey = session.provider === "deepseek" ? await this.deepseekSavedKey() : undefined;
+    if (session.provider === "deepseek" && !deepseekKey) {
+      if (gen !== session.gen) return undefined;
+      this.pool.delete(session);
+      session.priming = false;
+      this.emit(session, { type: "setBusy", value: false });
+      this.setProviderNeedsLogin("deepseek", true);
+      this.emit(session, { type: "onboarding", state: "deepseek-login", provider: "deepseek", platform: process.platform });
+      return undefined;
+    }
     if (session.provider === "agy" && !agyCredential) {
       if (gen !== session.gen) return undefined;
       this.pool.delete(session);
@@ -11308,9 +11374,12 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
     // A key's server reaches Google only through the relay, so each spawn
     // holds a lease on it until that process exits. The server logs its
     // gateway address, so its output is redacted for the relay's prefix.
-    const createBoundClient = (relay?: AgyRelayLease): AcpClient => {
-    try { runSignal.throwIfAborted(); } catch (error) { relay?.release(); throw error; }
-    const redact = (text: string) => relay ? this.agyKeyRelay().redact(text) : text;
+    const createBoundClient = (relay?: AgyRelayLease, deepseek?: DeepSeekRelayLease): AcpClient => {
+    try { runSignal.throwIfAborted(); } catch (error) { relay?.release(); deepseek?.release(); throw error; }
+    const redact = (text: string) => {
+      const safe = relay ? this.agyKeyRelay().redact(text) : text;
+      return deepseek ? safe.split(deepseek.token).join("<relay>") : safe;
+    };
     const client = new AcpClient({
       signal: runSignal,
       cliPath,
@@ -11324,9 +11393,11 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
       ...(session.provider === "grok"
         ? { grokVersion: grokHandshakeVersion, grokVersionVerified }
         : { backend: session.provider === "muse" ? new MuseBackend(session.musePosture, session.museCloud)
+          : session.provider === "deepseek" ? new DeepSeekBackend(deepseek, this.deepseekSessionDir())
           : session.provider === "agy" ? new AgyBackend({ keyMode: !!relay }) : this.createProviderBackend(session.provider) }),
     });
     if (relay) client.once("exit", () => relay.release());
+    if (deepseek) this.bindDeepseekRelay(client, deepseek);
     session.client = client;
     this.syncHumanWait(session);
     // A replacement process may have gained the capability after a CLI update.
@@ -11939,7 +12010,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
       this.setStartupStage(session, "starting");
       const client = createBoundClient(agyCredential?.method === "api-key"
         ? await this.agyKeyRelay().acquire(agyCredential.key)
-        : undefined);
+        : undefined, deepseekKey ? await this.deepseekRelay(deepseekKey) : undefined);
       // Version probe done to the first spawn attempt: resolving the
       // environment (which on Windows can shell out to locate a shell) AND
       // building the ACP client with its handlers. Recorded after
@@ -13308,6 +13379,14 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
       }
       case "runGrokLogin": {
         const provider: AcpProvider = isInternalProvider(msg.provider) ? msg.provider : "grok";
+        if (provider === "deepseek") {
+          await this.deepseekSavedKey();
+          this.postProviderState();
+          const message: HostMsg = { type: "onboarding", state: "deepseek-login", provider, platform: process.platform };
+          if (clientId) this.sendRemoteClient(clientId, message);
+          else this.postLocal(message);
+          break;
+        }
         if (provider === "agy" && (origin === "remote" || !this.agyOffered())) {
           // Google's sign-in opens a browser on THIS machine, which from a
           // phone would be a desk nobody is sitting at. Refused before any
@@ -13474,6 +13553,36 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
           provider,
           launched: true,
         });
+        break;
+      }
+      case "deepseekSignIn": {
+        if (origin !== "local") break;
+        const key = msg.key === undefined ? await this.deepseekSavedKey() : normalizeDeepSeekApiKey(msg.key);
+        if (!key) {
+          this.postLocal({ type: "onboarding", state: "deepseek-login", provider: "deepseek", platform: process.platform,
+            reason: "Paste a valid DeepSeek API key." });
+          break;
+        }
+        try { await this.context.secrets.store(DEEPSEEK_API_KEY_SECRET, key); }
+        catch {
+          this.postLocal({ type: "onboarding", state: "deepseek-login", provider: "deepseek", platform: process.platform,
+            reason: "The key could not be saved on this machine." });
+          break;
+        }
+        this.deepseekKeySaved = true;
+        await this.disposeAdapterHistoryClient("deepseek");
+        for (const live of new Set([this.focused, ...this.pool, ...this.remoteClients.detachedActiveValues()])) {
+          if (live?.provider !== "deepseek" || !live.client) continue;
+          const client = this.detachClient(live);
+          await client?.dispose();
+          live.priming = false;
+          live.status = "idle";
+          this.emit(live, { type: "setBusy", value: false });
+        }
+        this.setProviderNeedsLogin("deepseek", false);
+        await this.setProviderConnected("deepseek", true);
+        await this.adoptSessionsForConnectedProvider("deepseek", session);
+        this.postLocal({ type: "onboarding", state: "provider-connected", provider: "deepseek", platform: process.platform });
         break;
       }
       case "agySignIn": {
@@ -14460,7 +14569,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
   private reservedMcpIdentityFor(session: Session): ReservedMcpIdentity {
     const cwd = this.sessionCwd(session);
     const parts: ReservedMcpIdentity[] = [];
-    if (session.provider === "muse" || session.provider === "agy") return { names: [], urls: [] };
+    if (session.provider === "muse" || session.provider === "agy" || session.provider === "deepseek") return { names: [], urls: [] };
     for (const filePath of mcpConfigPaths({
       cwd,
       provider: session.provider,
@@ -15187,7 +15296,10 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
         await existing.client.dispose();
       }
       if (signal.aborted) return undefined;
-      const backend = this.createProviderBackend(provider);
+      const deepseekKey = provider === "deepseek" ? await this.deepseekSavedKey() : undefined;
+      const relay = deepseekKey ? await this.deepseekRelay(deepseekKey) : undefined;
+      if (signal.aborted) { relay?.release(); return undefined; }
+      const backend = provider === "deepseek" ? new DeepSeekBackend(relay, this.deepseekSessionDir()) : this.createProviderBackend(provider);
       if (!backend) return undefined;
       const client = new AcpClient({
         signal: this.providerRunSignal(provider),
@@ -15195,16 +15307,19 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
         cwd: this.projectHomeDir(),
         env: { ...process.env },
         backend,
-        log: (message) => this.host.appendLine(message),
+        log: (message) => this.host.appendLine(relay ? message.split(relay.token).join("<relay>") : message),
       });
-      if (provider === "muse") client.on("initialized", (init) => {
+      if (relay) this.bindDeepseekRelay(client, relay);
+      if (provider === "muse" || provider === "deepseek") client.on("initialized", (init) => {
         if (signal.aborted) return;
-        const catalog = init?._meta?.models;
+        const rawCatalog = init?._meta?.models;
+        const catalog = Array.isArray(rawCatalog) ? { availableModels: rawCatalog, currentModelId: rawCatalog[0]?.modelId } : rawCatalog;
         if (!Array.isArray(catalog?.availableModels)) return;
         const models = catalog.availableModels.map((m: any) => ({ modelId: m.modelId, name: m.name,
-          description: m.description, totalContextTokens: m._meta?.totalContextTokens }));
+          description: m.description, totalContextTokens: m._meta?.totalContextTokens,
+          ...(provider === "deepseek" ? { reasoningEfforts: ["none", "low", "high", "max"] } : {}) }));
         const cache = this.state.get<ProviderModelCache>(PROVIDER_MODEL_CACHE_KEY, {});
-        void this.state.update(PROVIDER_MODEL_CACHE_KEY, { ...cache, muse: { models, currentModelId: catalog.currentModelId, seenAt: Date.now() } });
+        void this.state.update(PROVIDER_MODEL_CACHE_KEY, { ...cache, [provider]: { models, currentModelId: catalog.currentModelId, seenAt: Date.now() } });
       });
       let exited = false;
       client.on("exit", () => {
@@ -16652,6 +16767,7 @@ ${many ? `${working.length} conversations are` : "A conversation is"} still work
       claude: pickSttBackend({ ...state, provider: "claude" }) ?? null,
       muse: pickSttBackend({ ...state, provider: "muse" }) ?? null,
       agy: pickSttBackend({ ...state, provider: "agy" }) ?? null,
+      deepseek: pickSttBackend({ ...state, provider: "deepseek" }) ?? null,
     } };
   }
 

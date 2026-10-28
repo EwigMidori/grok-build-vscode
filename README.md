@@ -16,6 +16,8 @@ Both speak JSON-RPC to `grok agent stdio` (and to **Codex**, **Claude Code**, **
 
 No manual setup on either host: onboarding **walks you through installing the `grok` CLI and signing in** — with a **SuperGrok or X Premium+ subscription**, or an **xAI API key**. The other agents connect from **Settings → Providers**, each with its own account.
 
+**DeepSeek without a CLI:** connect with a DeepSeek API key in **Settings → Providers → DeepSeek** on the computer running the workspace. The bundled agent uses DeepSeek's **Responses API**, with `deepseek-flash` (text and images) and `deepseek-v4-pro` (text), streaming thinking, reasoning-effort selection, approved file edits and commands, and resumable local history. It currently offers Agent mode only, without Plan, Auto accept, MCP, or compaction. See [DeepSeek setup and limits](docs/deepseek.md).
+
 ![Grok Build in VS Code, choosing Grok 4.7 and its reasoning effort](docs/screenshots/grok_4.7.png)
 
 ![The Projects rail beside a conversation running a deep-research workflow, with context and subscription usage open](docs/screenshots/rail.png)

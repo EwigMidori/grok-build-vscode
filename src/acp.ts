@@ -80,7 +80,7 @@ import {
   type ThumbsRating,
 } from "./feedback";
 
-export type EffortLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type EffortLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type PromptContentBlock =
   | { type: "text"; text: string }
@@ -218,7 +218,7 @@ export interface FsWriteHandler {
   (path: string, content: string): Promise<void>;
 }
 export interface TerminalHandler {
-  create(params: { command: string; env?: Array<{ name: string; value: string }>; cwd?: string; outputByteLimit?: number }): { terminalId: string };
+  create(params: { command: string; args?: string[]; directArgv?: boolean; env?: Array<{ name: string; value: string }>; cwd?: string; outputByteLimit?: number }): { terminalId: string };
   output(terminalId: string): { output: string; exitStatus: { exitCode: number } | null; truncated: boolean };
   waitForExit(terminalId: string): Promise<{ exitCode: number }>;
   kill(terminalId: string): void;
@@ -658,7 +658,7 @@ export class AcpClient extends EventEmitter {
         this.opts.log(`[acp] Failed to set reasoning effort to ${requestedEffort}: ${(err as Error).message}.`);
       }
     }
-    if (this.provider === "muse" && res?.modes?.currentModeId) {
+    if ((this.provider === "muse" || this.provider === "deepseek") && res?.modes?.currentModeId) {
       this.currentModeId = res.modes.currentModeId;
       this.emit("modeChanged", this.currentModeId);
     }
@@ -727,7 +727,7 @@ export class AcpClient extends EventEmitter {
     // session override, not a stale global value.
     const loadedEffort = this.availableModels.find((m) => m.modelId === this.currentModelId)?.reasoningEffort;
     if (loadedEffort) this.currentReasoningEffort = loadedEffort;
-    if (this.provider === "muse" && res?.modes?.currentModeId) {
+    if ((this.provider === "muse" || this.provider === "deepseek") && res?.modes?.currentModeId) {
       this.currentModeId = res.modes.currentModeId;
       this.emit("modeChanged", this.currentModeId);
     }
@@ -1822,6 +1822,9 @@ export class AcpClient extends EventEmitter {
         // hooks, etc.). Plan mode classifies the command against the host's
         // environment, so do not pass agent-supplied overrides to the spawner.
         const createParams = { ...params };
+        // Only DeepSeek uses executable + argv; the agent cannot select execution policy.
+        delete createParams.directArgv;
+        if (this.provider === "deepseek") createParams.directArgv = true;
         if (this.usesClientPlanGate && this.planActive) delete createParams.env;
         const created = this.terminal.create(createParams);
         this.terminalCommands.set(created.terminalId, params.command);

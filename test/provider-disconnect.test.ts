@@ -129,7 +129,7 @@ describe("Settings → Providers at a desk disconnects (#203)", () => {
     vi.stubEnv(CLOUD_ENVIRONMENT_ENV, "");
     const sidebar = makeSidebar(["codex"]);
     const { providers } = sidebar.providerStateMessage();
-    expect(providers.map((p: { keepsCliSignIn?: boolean }) => p.keepsCliSignIn)).toEqual([true, true, true, true]);
+    expect(providers.every((p: { keepsCliSignIn?: boolean }) => p.keepsCliSignIn === true)).toBe(true);
   });
 });
 
@@ -149,7 +149,8 @@ describe("a cloud environment still signs the CLI out (#203)", () => {
     vi.stubEnv(CLOUD_ENVIRONMENT_ENV, "1");
     const sidebar = makeSidebar(["codex"]);
     const { providers } = sidebar.providerStateMessage();
-    expect(providers.some((p: { keepsCliSignIn?: boolean }) => "keepsCliSignIn" in p)).toBe(false);
+    expect(providers.filter((p: { id: string }) => p.id !== "deepseek").some((p: { keepsCliSignIn?: boolean }) => "keepsCliSignIn" in p)).toBe(false);
+    expect(providers.find((p: { id: string }) => p.id === "deepseek").keepsCliSignIn).toBe(true);
   });
 });
 

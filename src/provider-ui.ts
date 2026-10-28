@@ -11,6 +11,7 @@ export function providerDisplayName(provider: AcpProvider): string {
   if (provider === "claude") return "Claude";
   if (provider === "muse") return "Muse Code";
   if (provider === "agy") return "Antigravity";
+  if (provider === "deepseek") return "DeepSeek";
   return "Grok";
 }
 
@@ -108,7 +109,8 @@ export function usableProviderIds(
   return connectedProviderIds(connections, located).filter((provider) => needsLogin[provider] !== true);
 }
 
-export function providerLoginState(provider: AcpProvider): "auth-required" | "codex-login" | "claude-login" | "muse-login" | "agy-login" {
+export function providerLoginState(provider: AcpProvider): "auth-required" | "codex-login" | "claude-login" | "muse-login" | "agy-login" | "deepseek-login" {
+  if (provider === "deepseek") return "deepseek-login";
   if (provider === "codex") return "codex-login";
   if (provider === "claude") return "claude-login";
   if (provider === "muse") return "muse-login";
@@ -116,7 +118,8 @@ export function providerLoginState(provider: AcpProvider): "auth-required" | "co
   return "auth-required";
 }
 
-export function missingProviderState(provider: AcpProvider): "missing-cli" | "missing-codex" | "missing-claude" | "missing-muse" | "missing-agy" {
+export function missingProviderState(provider: AcpProvider): "missing-cli" | "missing-codex" | "missing-claude" | "missing-muse" | "missing-agy" | "deepseek-login" {
+  if (provider === "deepseek") return "deepseek-login";
   if (provider === "codex") return "missing-codex";
   if (provider === "claude") return "missing-claude";
   if (provider === "muse") return "missing-muse";

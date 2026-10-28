@@ -78,6 +78,30 @@ Do **any** of the following:
 
 Either change takes effect immediately — no reload needed. A non-official build never sends, regardless of these settings.
 
+## DeepSeek conversations
+
+When you connect DeepSeek and send a message, AFK Pilot sends the conversation
+and tool results to `https://api.deepseek.com/responses`, using the API key you
+entered on this computer. Images are sent only with `deepseek-flash`. DeepSeek's
+Responses API is stateless, so each request includes the full local conversation
+history, including reasoning and previous tool results. Server-side response
+IDs are not used for continuation. Provider data handling follows DeepSeek's
+policies; stateless continuation is not a claim about its logging or retention.
+
+The key is kept in VS Code Secret Storage or the desktop's encrypted HostSecrets.
+It is not saved in conversation history, passed to the agent process, or sent to
+a linked phone. The host substitutes it in a fixed-target HTTPS relay protected
+by a process-scoped loopback capability. Tool commands do not inherit that
+capability or `DEEPSEEK_*` environment variables. Disconnect keeps the saved key;
+Log Out deletes it.
+
+Canonical history is saved locally under the host's global storage directory
+in `deepseek/sessions`; a standalone adapter defaults to
+`~/.afkpilot/deepseek/sessions`. It includes prompts, image inputs, reasoning,
+and tool results. File tools are workspace-scoped; writes and commands ask for
+approval. Approved commands are not sandboxed and can access anything your
+account can access, so review them before allowing them.
+
 ## Thumbs feedback
 
 Separate from telemetry: when **Thumbs feedback to SpaceXAI** is on (`grok.thumbsFeedback`, default **off**) and a Grok session advertises feedback, the turn footer offers thumbs. Clicking one sends a rating (`-1` / `0` / `1`) to the Grok Build CLI over `_x.ai/feedback`. No comment, no message content, and nothing is stored or read back. Codex and Claude never show thumbs. Off, the buttons are not offered and a click is ignored.

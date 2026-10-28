@@ -28,6 +28,7 @@ import {
 import { MAX_CONNECTOR_KEY_CHARS } from "../mcp-connectors";
 import { MAX_GITHUB_TOKEN_CHARS } from "../github-auth";
 import { MAX_AGY_API_KEY_CHARS } from "../agy-auth";
+import { normalizeDeepSeekApiKey } from "../deepseek-backend";
 import { ROUTINE_PROMPT_MAX } from "../routines";
 import { isInternalProvider } from "../acp-backend";
 
@@ -516,6 +517,9 @@ export function parseWebviewMsg(raw: unknown): WebviewMsg | null {
     case "agySignIn":
       if (raw.method !== "google" && raw.method !== "api-key") return null;
       if (raw.key !== undefined && (raw.method !== "api-key" || !isString(raw.key) || raw.key.length > MAX_AGY_API_KEY_CHARS)) return null;
+      break;
+    case "deepseekSignIn":
+      if (raw.key !== undefined && !normalizeDeepSeekApiKey(raw.key)) return null;
       break;
     case "welcomeTipShown":
     case "dismissWelcomeTip":

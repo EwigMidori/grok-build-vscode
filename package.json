@@ -599,7 +599,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p . && npm run compile:muse-adapter",
+    "compile": "tsc -p . && npm run compile:muse-adapter && npm run compile:deepseek-adapter",
+    "compile:deepseek-adapter": "tsc -p tsconfig.deepseek-adapter.json",
     "compile:muse-adapter": "tsc -p tsconfig.muse-adapter.json",
     "watch": "tsc -p . -w",
     "test": "vitest run",

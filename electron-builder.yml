@@ -41,6 +41,7 @@ files:
   - LICENSE
   - out/**/*
   - out/muse-adapter/*.mjs
+  - out/deepseek-adapter/*.mjs
   - media/**/*
   - resources/**/*
   - node_modules/ws/**/*

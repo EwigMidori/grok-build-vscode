@@ -540,7 +540,8 @@ describe("one connect wizard, in a dialog, opened from anywhere", () => {
   });
 
   it("keeps the welcome card as an entry point, never as a second renderer", () => {
-    const show = chatSrc.slice(chatSrc.indexOf("function showOnboarding("), chatSrc.indexOf("function showOnboarding(") + 2500);
+    const start = chatSrc.indexOf("function showOnboarding(");
+    const show = chatSrc.slice(start, chatSrc.indexOf("\n  function ", start + 1));
     // A live flow is stripped from the card unconditionally — not merely when
     // a wizard is already open, because this function runs BEFORE
     // syncConnectWizard on the frame that starts one, and both painted it.

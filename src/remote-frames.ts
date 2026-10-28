@@ -367,6 +367,8 @@ function parseRemoteWebviewMsg(msg: unknown): WebviewMsg | null {
       return isRemoteCwd(value.cwd) && isRemoteMentionPath(value.relPath)
         ? msg as WebviewMsg
         : null;
+    case "deepseekSignIn":
+      return null;
     case "readProviderConfig":
       return ["grok", "codex", "claude"].includes(value.provider as string) ? msg as WebviewMsg : null;
     case "restartProviderSession":

@@ -63,7 +63,7 @@ for (const f of packed) {
 const builtins = new Set(builtinModules);
 // Spawned entries are not reachable from a CJS require. Check their existence
 // and recursively resolve their ESM imports against the actual packed files.
-const problems = checkEsmPackageGraph(root, packed, ["out/muse-adapter/main.mjs"]);
+const problems = checkEsmPackageGraph(root, packed, ["out/muse-adapter/main.mjs", "out/deepseek-adapter/main.mjs"]);
 
 // Production install of @agentclientprotocol/codex-acp also pulls its
 // declared tree, including optional @openai/codex platform binaries.

@@ -1,14 +1,23 @@
 # Signing agents in
 
-Grok Build drives three command-line agents, and it never holds their
-credentials. Each one signs you in itself, stores its own token in its own
-directory, and talks to its own vendor. The extension's job is to start the
-right command in the right place.
+For CLI-backed agents, each CLI signs you in itself, stores its own token in
+its own directory, and talks to its vendor. DeepSeek is different: its bundled
+agent uses an API key entered in Settings and held in the host's secure storage.
+Antigravity can also use a host-held Gemini API key. These keys are not put in
+the agent's environment.
 
 That matters more than it sounds, because it decides what is possible from a
 phone and on a machine with no screen.
 
 ## What the app does today
+
+**DeepSeek** needs no CLI or device-code flow. On the computer running the
+workspace, open **Settings → Providers → DeepSeek**, paste a key from
+[DeepSeek Platform](https://platform.deepseek.com/), and choose **Use key**.
+Disconnect retains it; **AFK Pilot: Log Out** removes it. Key presence is not
+proof that DeepSeek will accept the key: an authentication failure on a turn
+reopens the sign-in panel. A phone can use a connected DeepSeek conversation,
+but cannot submit the key. See [DeepSeek setup and limits](deepseek.md).
 
 It depends on where you press the button, and the difference is deliberate.
 

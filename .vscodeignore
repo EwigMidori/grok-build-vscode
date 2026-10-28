@@ -13,6 +13,7 @@ out-integration/**
 .vscode-test/**
 tsconfig.json
 tsconfig.muse-adapter.json
+tsconfig.deepseek-adapter.json
 adapters/**
 # ALLOWLIST — this excludes every dependency and re-includes them one by one.
 # out/ is plain tsc output, not a bundle, so anything `require`d at runtime must
@@ -63,6 +64,7 @@ node_modules/**
 # `out/desktop/**` rule does not re-exclude those files under vsce's matcher.
 !out/*.js
 !out/muse-adapter/*.mjs
+!out/deepseek-adapter/*.mjs
 # Desktop Electron app — never ship in the VS Code extension vsix.
 out/desktop/**
 # …except the two modules the EXTENSION itself requires at runtime. Not a

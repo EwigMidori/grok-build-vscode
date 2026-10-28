@@ -6,6 +6,7 @@
     claude: { label: "Claude", deleteHistory: true, compact: true },
     muse: { label: "Muse Code", deleteHistory: false, compact: false },
     agy: { label: "Antigravity", deleteHistory: false, compact: false },
+    deepseek: { label: "DeepSeek", deleteHistory: false, compact: false },
   };
   function providerSupports(provider, action) {
     return Object.hasOwn(PROVIDER_ACTIONS, provider || "grok")
@@ -95,7 +96,7 @@
     "listRoutines", "saveRoutine", "deleteRoutine", "setRoutinePaused", "runRoutineNow",
     "setShowThinking", "setAppPurpose", "setExpandCommandOutputs",
     "dropFile", "permissionAnswer", "exitPlanAnswer", "questionAnswer", "questionCancel",
-    "setContextWindow", "setModel", "installCodex", "cancelCodexInstall", "installAgy", "cancelAgyInstall", "agySignIn", "setExperimentalAntigravity", "runInstallCmd", "runMuseInstallCmd", "runGrokLogin", "cancelDeviceLogin", "submitDeviceLoginCode", "logout", "checkGrokUpdate", "updateGrok", "updateCodex", "updateClaude",
+    "setContextWindow", "setModel", "installCodex", "cancelCodexInstall", "installAgy", "cancelAgyInstall", "agySignIn", "deepseekSignIn", "setExperimentalAntigravity", "runInstallCmd", "runMuseInstallCmd", "runGrokLogin", "cancelDeviceLogin", "submitDeviceLoginCode", "logout", "checkGrokUpdate", "updateGrok", "updateCodex", "updateClaude",
     "recheckConnection", "refreshProviders", "retryProviderSession", "listSessions", "listRepoSessions", "selectRepo", "toggleRepoPin", "setRepoArchived", "setRepoColor", "setRepoIcon", "toggleSessionPin", "resumeSession", "renameSession", "deleteSession",
       "clearAllSessions", "pickFile", "mentionQuery", "addMentionFile", "listProjectDir", "readProjectFile", "writeProjectFile", "gitStatus", "gitFileDiff", "turnFileDiff", "turnFileOpenDiff", "gitRun", "pasteImage", "uploadFile", "voiceStart", "voiceStop",
       "remoteVoiceStart", "remoteVoiceChunk", "remoteVoiceStop", "setVoiceBackend", "configureOpenAiVoice",

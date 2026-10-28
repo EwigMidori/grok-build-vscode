@@ -13,10 +13,11 @@ The host is a UI shell over `grok agent stdio`, the pinned
 `@agentclientprotocol/codex-acp` and `@agentclientprotocol/claude-agent-acp` adapters,
 the bundled Muse adapter (`adapters/muse/`) driving the installed Muse CLI
 through the pinned official SDK, or Google's Antigravity ACP server, spawned
-directly (experimental, desk only). It speaks JSON-RPC over the
+directly (experimental, desk only), or the bundled DeepSeek Responses API agent
+(`adapters/deepseek/`, no external CLI). It speaks JSON-RPC over the
 [Agent Client Protocol (ACP)](https://agentclientprotocol.com) on the selected
 backend's stdin/stdout and renders one internal event vocabulary. Conversation
-state remains in the selected CLI; provider identity and presentation state live
+state remains in the selected CLI or bundled agent; provider identity and presentation state live
 in the host.
 
 | Lives in the CLI | Lives in the extension |
@@ -43,6 +44,8 @@ sidebar host ──► AcpClient ──► GrokBackend   ──► grok agent st
                                                    (CLAUDE_CODE_EXECUTABLE=claude)
                          ├────► MuseBackend   ──► node muse-adapter/main.mjs
                                                    ──► muse serve (MSP via SDK)
+                         ├────► DeepSeekBackend ─► node deepseek-adapter/main.mjs
+                         │                          ─► host relay ─► DeepSeek /responses
                          └────► AgyBackend    ──► agy_acp_server (Google's ACP
                                                    server, pinned managed download)
        ▲                         │
@@ -88,7 +91,7 @@ in Anthropic's own `claude` CLI — this host never implements, proxies, holds,
 or forwards Claude credentials. Muse also owns its credentials: after a successful
 `muse login`, the host observes credential-file presence without reading its contents.
 Muse exposes no credential-status probe; later authentication failures set `needsLogin`.
-`INTERNAL_PROVIDERS` includes all five identities (Antigravity's `agy` too); `ACP_PROVIDERS` retains the legacy
+`INTERNAL_PROVIDERS` includes all six identities (Antigravity's `agy` and DeepSeek too); `ACP_PROVIDERS` retains the legacy
 three-id vocabulary. Muse UI requires its `providerState` advertisement, with
 actions separately gated by capabilities: no CLI mode command (`supportsModeSwitching`
 stays false), steering, compaction, history deletion or host-injected MCP servers.
@@ -97,6 +100,16 @@ offered, and Auto accept selects only the once-scoped allow. Its effort picker u
 vocabulary through `session/set_config_option` → MSP `session/setReasoningEffort`.
 Muse’s offered allow choices and scope labels are retained; host program grants
 do not replace them.
+
+DeepSeek uses a bundled ACP agent rather than delegating to a vendor CLI.
+`deepseek-key-relay.ts` owns the real credential and fixed upstream; the child
+gets a short-lived loopback capability. Its stateless request history includes
+reasoning and tool results, persisted separately from rendered chat events.
+The adapter checks real workspace containment before delegated file access and
+requests permission before writes and terminal creation. Only this provider's
+terminals use the host-selected executable/argv `directArgv` path with `shell: false`;
+other providers retain their existing shell-string behavior. Agent mode is the
+only offered mode. See [DeepSeek setup and limits](deepseek.md).
 
 Connection is a stored choice, not something a probe can discover.
 `grok.providerConnections.v2` (`PROVIDER_CONNECTIONS_KEY`) records that the user

@@ -2,7 +2,7 @@ import type { EffortLevel, PromptContentBlock } from "./acp";
 
 export const ACP_PROVIDERS = ["grok", "codex", "claude"] as const;
 // The legacy wire vocabulary above stays frozen for older receivers.
-export const INTERNAL_PROVIDERS = [...ACP_PROVIDERS, "muse", "agy"] as const;
+export const INTERNAL_PROVIDERS = [...ACP_PROVIDERS, "muse", "agy", "deepseek"] as const;
 export type LegacyAcpProvider = (typeof ACP_PROVIDERS)[number];
 export type AcpProvider = (typeof INTERNAL_PROVIDERS)[number];
 
@@ -27,6 +27,7 @@ const PROVIDER_ACTIONS: Record<AcpProvider, {
   claude: { deleteHistory: true, compact: true, adapterHistory: true, modeSwitching: true, approvalModeSwitching: false, autoAccept: true, perCallContext: true, clientMcp: true },
   muse: { deleteHistory: false, compact: false, adapterHistory: true, modeSwitching: false, approvalModeSwitching: true, autoAccept: true, perCallContext: false, clientMcp: false },
   agy: { deleteHistory: false, compact: false, adapterHistory: true, modeSwitching: false, approvalModeSwitching: false, autoAccept: true, perCallContext: false, clientMcp: false },
+  deepseek: { deleteHistory: false, compact: false, adapterHistory: true, modeSwitching: false, approvalModeSwitching: false, autoAccept: false, perCallContext: false, clientMcp: false },
 };
 
 /**

@@ -61,7 +61,7 @@ export function musePosture(defaultMode: string | undefined, isResume: boolean,
 }
 
 export function usesClientAutoAccept(provider: string): boolean {
-  return provider !== "muse";
+  return provider !== "muse" && provider !== "deepseek";
 }
 
 /**
@@ -85,6 +85,7 @@ export function startsInYolo(defaultMode: string | undefined, isResume: boolean)
 
 /** Modes this session's picker offers. Codex's plan review is outside this menu; Muse and Antigravity have no Plan. */
 export function sessionModes(provider: string, isCloud = false): ModeId[] {
+  if (provider === "deepseek") return ["agent"];
   // Deny unmatched stalls Muse's end-of-turn reminder agent; see research/muse-modes.md.
   if (provider === "muse") return isCloud ? ["yolo", "agent"] : ["yolo", "agent", "onRequest"];
   if (hasNativeAutoMode(provider)) return ["agent", "auto", "plan", "yolo"];
